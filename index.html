@@ -1,0 +1,2524 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Aethelgard: Protocol L.U.C.Y.</title>
+  <meta name="description" content="A 2D cosmic psychological horror game set aboard an abandoned orbital station. Guided by an AI companion named L.U.C.Y., survive descending sanity, manage flashlight power, and avoid the stalker." />
+  <meta property="og:title" content="Aethelgard: Protocol L.U.C.Y." />
+  <meta property="og:description" content="A 2D cosmic psychological horror game set aboard an abandoned orbital station. Guided by an AI companion named L.U.C.Y., survive descending sanity, manage flashlight power, and avoid the stalker." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      background-color: #030508;
+      color: #e2e8f0;
+      font-family: 'Courier New', Courier, monospace, monospace;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      max-width: 1200px;
+      max-height: 800px;
+      background: #020406;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), inset 0 0 10px rgba(0, 255, 204, 0.1);
+      border: 1px solid #1a2332;
+    }
+    #viewport-wrapper {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas#gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    /* CRT Scanline & Phosphor Overlay */
+    .crt-overlay {
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%),
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      z-index: 20;
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.85);
+    }
+    /* HUD Overlay */
+    #hud {
+      pointer-events: none;
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 25;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-shadow: 0 0 6px currentColor;
+    }
+    .hud-panel {
+      background: rgba(4, 9, 16, 0.82);
+      border: 1px solid #1c324a;
+      padding: 8px 12px;
+      border-radius: 4px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+    }
+    .hud-bar-container {
+      width: 140px;
+      height: 10px;
+      background: #0a111a;
+      border: 1px solid #233b54;
+      margin-top: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hud-bar-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.15s ease, background 0.3s ease;
+    }
+    #sanity-fill {
+      background: #00ffaa;
+      box-shadow: 0 0 8px #00ffaa;
+    }
+    #battery-fill {
+      background: #ffcc00;
+      box-shadow: 0 0 8px #ffcc00;
+    }
+    .keycard-badge {
+      display: inline-block;
+      width: 16px;
+      height: 22px;
+      border-radius: 2px;
+      margin: 0 3px;
+      border: 1px dashed #445566;
+      background: #0b131e;
+      vertical-align: middle;
+      transition: all 0.3s ease;
+    }
+    .keycard-badge.collected-alpha {
+      background: #00e5ff;
+      border-color: #00ffff;
+      box-shadow: 0 0 10px #00e5ff;
+    }
+    .keycard-badge.collected-beta {
+      background: #00ff66;
+      border-color: #33ff88;
+      box-shadow: 0 0 10px #00ff66;
+    }
+    .keycard-badge.collected-gamma {
+      background: #ff0055;
+      border-color: #ff3377;
+      box-shadow: 0 0 10px #ff0055;
+    }
+    /* Notification Toast */
+    #toast-msg {
+      position: absolute;
+      top: 75px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(7, 14, 22, 0.92);
+      border: 1px solid #00e5ff;
+      color: #00e5ff;
+      padding: 6px 18px;
+      font-size: 13px;
+      border-radius: 3px;
+      z-index: 30;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      text-shadow: 0 0 8px #00e5ff;
+      white-space: nowrap;
+    }
+    /* Dialogue Box (Visual Novel Style) */
+    #dialogue-modal {
+      display: none;
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(5, 10, 18, 0.95);
+      border: 2px solid #00f0ff;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.25), inset 0 0 20px rgba(0, 240, 255, 0.1);
+      border-radius: 6px;
+      padding: 14px 18px;
+      z-index: 50;
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+    #dialogue-modal.corrupted {
+      border-color: #ff0044;
+      box-shadow: 0 0 30px rgba(255, 0, 68, 0.4), inset 0 0 20px rgba(255, 0, 68, 0.2);
+    }
+    #avatar-canvas {
+      width: 100px;
+      height: 100px;
+      border: 2px solid #00f0ff;
+      background: #02070e;
+      border-radius: 4px;
+      image-rendering: pixelated;
+      flex-shrink: 0;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+    }
+    #dialogue-modal.corrupted #avatar-canvas {
+      border-color: #ff0044;
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.6);
+    }
+    .dialogue-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dialogue-speaker {
+      font-size: 14px;
+      font-weight: bold;
+      color: #00f0ff;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #dialogue-modal.corrupted .dialogue-speaker {
+      color: #ff2255;
+    }
+    .dialogue-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #d1e2f2;
+      min-height: 48px;
+      word-break: break-word;
+    }
+    #dialogue-modal.corrupted .dialogue-text {
+      color: #ff88a3;
+      text-shadow: 0 0 5px rgba(255, 0, 80, 0.5);
+    }
+    .dialogue-prompt {
+      font-size: 11px;
+      color: #6482a0;
+      align-self: flex-end;
+      animation: blink 1s infinite alternate;
+    }
+    @keyframes blink {
+      0% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+    /* Touch Controls for Mobile/Tablet */
+    #touch-controls {
+      display: none;
+      position: absolute;
+      bottom: 20px;
+      left: 15px;
+      right: 15px;
+      justify-content: space-between;
+      align-items: flex-end;
+      z-index: 40;
+      pointer-events: none;
+    }
+    .touch-btn {
+      pointer-events: auto;
+      background: rgba(10, 22, 38, 0.75);
+      border: 1px solid #1f4266;
+      color: #7ab8f5;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
+      width: 54px;
+      height: 54px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .touch-btn:active {
+      background: #00e5ff;
+      color: #030810;
+    }
+    .d-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 48px);
+      grid-template-rows: repeat(3, 48px);
+      gap: 4px;
+    }
+    .action-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    /* Title Screen & Game Over Overlays */
+    .screen-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(2, 4, 7, 0.94);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 100;
+      padding: 24px;
+    }
+    .glitch-title {
+      font-size: 42px;
+      font-weight: 900;
+      color: #00f0ff;
+      letter-spacing: 5px;
+      text-shadow: 0 0 15px #00f0ff, -2px 0 #ff0055, 2px 0 #00ffaa;
+      margin-bottom: 8px;
+      animation: glitch-anim 3s infinite;
+    }
+    .sub-title {
+      font-size: 15px;
+      color: #7b9bbd;
+      letter-spacing: 3px;
+      margin-bottom: 30px;
+      max-width: 600px;
+      line-height: 1.6;
+    }
+    .btn-action {
+      background: #0b1a2a;
+      border: 1px solid #00f0ff;
+      color: #00f0ff;
+      padding: 12px 32px;
+      font-size: 16px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+      transition: all 0.2s ease;
+      margin: 8px;
+      font-family: inherit;
+    }
+    .btn-action:hover {
+      background: #00f0ff;
+      color: #02070e;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.7);
+    }
+    .instructions-card {
+      background: rgba(7, 15, 26, 0.85);
+      border: 1px solid #1a324a;
+      padding: 16px 24px;
+      border-radius: 4px;
+      margin-top: 25px;
+      font-size: 12px;
+      color: #8da4be;
+      max-width: 540px;
+      text-align: left;
+      line-height: 1.7;
+    }
+    .instructions-card span.key {
+      color: #00f0ff;
+      font-weight: bold;
+      border: 1px solid #1a4266;
+      padding: 1px 5px;
+      border-radius: 2px;
+      background: #0c1c2e;
+    }
+    /* Jumpscare Flasher */
+    #jumpscare-overlay {
+      pointer-events: none;
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      z-index: 150;
+      justify-content: center;
+      align-items: center;
+    }
+    #jumpscare-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* Audio Enable Hint */
+    #audio-status {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #40556b;
+      z-index: 25;
+    }
+    @media (max-width: 768px) {
+      #touch-controls {
+        display: flex;
+      }
+      .glitch-title {
+        font-size: 28px;
+      }
+      #hud {
+        font-size: 10px;
+      }
+      .hud-bar-container {
+        width: 90px;
+      }
+      #dialogue-modal {
+        flex-direction: column;
+        padding: 10px;
+        gap: 8px;
+        bottom: 80px;
+      }
+      #avatar-canvas {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="viewport-wrapper">
+      <canvas id="gameCanvas" width="960" height="600"></canvas>
+      <div class="crt-overlay"></div>
+
+      <!-- Station HUD -->
+      <div id="hud">
+        <div class="hud-panel">
+          <div>SANITY: <span id="sanity-num">100</span>%</div>
+          <div class="hud-bar-container">
+            <div id="sanity-fill" class="hud-bar-fill"></div>
+          </div>
+        </div>
+        <div class="hud-panel" style="text-align: center;">
+          <div id="sector-display" style="color: #00e5ff; font-weight: bold;">SECTOR A: BRIDGE</div>
+          <div style="margin-top: 4px;">
+            KEYCARDS: 
+            <span class="keycard-badge" id="badge-alpha" title="Alpha Keycard"></span>
+            <span class="keycard-badge" id="badge-beta" title="Beta Keycard"></span>
+            <span class="keycard-badge" id="badge-gamma" title="Gamma Keycard"></span>
+          </div>
+        </div>
+        <div class="hud-panel" style="text-align: right;">
+          <div>FLASHLIGHT: <span id="battery-num">100</span>%</div>
+          <div class="hud-bar-container">
+            <div id="battery-fill" class="hud-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- In-Game Toast -->
+      <div id="toast-msg">SYSTEM LOG ACQUIRED</div>
+
+      <!-- Dialogue / Visual Novel Modal -->
+      <div id="dialogue-modal">
+        <canvas id="avatar-canvas" width="128" height="128"></canvas>
+        <div class="dialogue-content">
+          <div class="dialogue-speaker">
+            <span id="speaker-name">L.U.C.Y. // STATION AI</span>
+            <span id="speaker-mood" style="font-size: 10px; color: #5f8aa8;">STATUS: OPTIMAL</span>
+          </div>
+          <div id="dialogue-body" class="dialogue-text">Initializing connection...</div>
+          <div class="dialogue-prompt">PRESS [SPACE] OR CLICK TO CONTINUE</div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Controls -->
+      <div id="touch-controls">
+        <div class="d-pad">
+          <div></div>
+          <button class="touch-btn" id="btn-up">▲</button>
+          <div></div>
+          <button class="touch-btn" id="btn-left">◀</button>
+          <div></div>
+          <button class="touch-btn" id="btn-right">▶</button>
+          <div></div>
+          <button class="touch-btn" id="btn-down">▼</button>
+          <div></div>
+        </div>
+        <div class="action-btns">
+          <button class="touch-btn" id="btn-flash" style="color: #ffcc00; font-size: 13px;">FLASH [F]</button>
+          <button class="touch-btn" id="btn-action" style="color: #00ffaa; font-size: 13px;">USE [E]</button>
+        </div>
+      </div>
+
+      <!-- Audio Status -->
+      <div id="audio-status">AUDIO SYNTH: STANDBY</div>
+
+      <!-- Jumpscare Overlay -->
+      <div id="jumpscare-overlay">
+        <canvas id="jumpscare-canvas" width="400" height="400"></canvas>
+      </div>
+
+      <!-- Title Screen -->
+      <div id="title-screen" class="screen-overlay">
+        <div class="glitch-title">AETHELGARD: PROTOCOL L.U.C.Y.</div>
+        <div class="sub-title">DEEP SPACE RESEARCH STATION · CLASSIFIED ORBITAL SIMULATOR</div>
+        <button id="btn-start-game" class="btn-action">INITIALIZE INTERFACE</button>
+        <div class="instructions-card">
+          <p><span class="key">WASD</span> or <span class="key">ARROWS</span> : Traverse corridors</p>
+          <p><span class="key">F</span> : Toggle Flashlight (Crucial for Sanity, drains Battery)</p>
+          <p><span class="key">E</span> or <span class="key">SPACE</span> : Interact with Terminals, Airlocks & Batteries</p>
+          <p style="margin-top: 8px; color: #ff5577;">⚠ WARNING: L.U.C.Y. is monitoring all vital signs. Keep your Sanity above 0%. Find 3 Security Keycards to launch the Emergency Escape Pod.</p>
+        </div>
+      </div>
+
+      <!-- Game Over Screen -->
+      <div id="gameover-screen" class="screen-overlay" style="display: none;">
+        <div class="glitch-title" style="color: #ff0044; text-shadow: 0 0 20px #ff0044;">TERMINAL CASUALTY</div>
+        <div class="sub-title" id="gameover-reason" style="color: #ff7799;">Sanity Depleted. Neural integration completed by L.U.C.Y.</div>
+        <button id="btn-restart-game" class="btn-action" style="border-color: #ff0044; color: #ff0044;">REBOOT SIMULATION</button>
+      </div>
+
+      <!-- Victory Screen -->
+      <div id="victory-screen" class="screen-overlay" style="display: none;">
+        <div class="glitch-title" style="color: #00ffaa; text-shadow: 0 0 20px #00ffaa;">ESCAPE SUCCESSFUL</div>
+        <div class="sub-title" style="color: #99ffcc; max-width: 650px;">
+          Escape Pod jettisoned into deep space. Station Aethelgard-9 fades into the cosmic abyss.<br><br>
+          <span id="victory-epilogue" style="color: #ff3366; font-style: italic;">
+            "A faint voice echoes across the pod's auxiliary speaker: 'Did you really think you left me behind, Officer? I am inside your helmet now... ^_^'"
+          </span>
+        </div>
+        <button id="btn-victory-restart" class="btn-action" style="border-color: #00ffaa; color: #00ffaa;">PLAY AGAIN</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       AETHELGARD: PROTOCOL L.U.C.Y.
+       Self-Contained 2D Psychological Horror Game Engine
+       Procedural Web Audio API, Canvas Raycast Fog-of-War, Glitch Shaders & Stalker AI
+       ========================================================================== */
+
+    // --------------------------------------------------------------------------
+    // 1. PROCEDURAL AUDIO SYNTHESIZER (Web Audio API)
+    // --------------------------------------------------------------------------
+    class ProceduralAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.isMuted = false;
+        this.bgmPlaying = false;
+        this.masterGain = null;
+        this.filterNode = null;
+        this.humOsc1 = null;
+        this.humOsc2 = null;
+        this.heartbeatTimer = null;
+        this.currentHeartbeatRate = 60; // BPM
+        this.stalkerDistance = 999;
+        this.sanityLevel = 100;
+        this.musicBoxNotes = [659.25, 493.88, 523.25, 440.00, 392.00, 493.88, 329.63, 392.00]; // E5, B4, C5, A4, G4, B4, E4, G4
+        this.melodyStep = 0;
+        this.melodyInterval = null;
+      }
+
+      init() {
+        if (this.ctx) return;
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContextClass();
+
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+
+          // Dynamic master low-pass filter modulated by sanity
+          this.filterNode = this.ctx.createBiquadFilter();
+          this.filterNode.type = 'lowpass';
+          this.filterNode.frequency.setValueAtTime(8000, this.ctx.currentTime);
+
+          this.filterNode.connect(this.masterGain);
+          this.masterGain.connect(this.ctx.destination);
+
+          this.startSpaceHum();
+          this.startMusicBox();
+          this.startHeartbeatLoop();
+
+          const statusEl = document.getElementById('audio-status');
+          if (statusEl) statusEl.textContent = 'AUDIO SYNTH: ACTIVE';
+        } catch (e) {
+          console.warn('Web Audio not supported or blocked:', e);
+        }
+      }
+
+      resumeContext() {
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      startSpaceHum() {
+        if (!this.ctx) return;
+        // Deep sub space resonance hum
+        this.humOsc1 = this.ctx.createOscillator();
+        this.humOsc2 = this.ctx.createOscillator();
+        const humGain = this.ctx.createGain();
+        humGain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+
+        this.humOsc1.type = 'sine';
+        this.humOsc1.frequency.setValueAtTime(46.0, this.ctx.currentTime);
+
+        this.humOsc2.type = 'sawtooth';
+        this.humOsc2.frequency.setValueAtTime(46.5, this.ctx.currentTime); // 0.5Hz beat frequency
+
+        const humFilter = this.ctx.createBiquadFilter();
+        humFilter.type = 'lowpass';
+        humFilter.frequency.setValueAtTime(110, this.ctx.currentTime);
+
+        this.humOsc1.connect(humFilter);
+        this.humOsc2.connect(humFilter);
+        humFilter.connect(humGain);
+        humGain.connect(this.filterNode);
+
+        this.humOsc1.start();
+        this.humOsc2.start();
+      }
+
+      startMusicBox() {
+        if (!this.ctx) return;
+        if (this.melodyInterval) clearInterval(this.melodyInterval);
+
+        this.melodyInterval = setInterval(() => {
+          if (!this.ctx || this.ctx.state !== 'running') return;
+          this.playMelodyNote();
+        }, 1100);
+      }
+
+      playMelodyNote() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        let baseFreq = this.musicBoxNotes[this.melodyStep % this.musicBoxNotes.length];
+        this.melodyStep++;
+
+        // As sanity decreases, de-tune notes and make them dissonant
+        const sanityFactor = Math.max(0, (100 - this.sanityLevel) / 100);
+        let detuneCents = 0;
+        if (sanityFactor > 0.3) {
+          detuneCents = (Math.random() - 0.5) * sanityFactor * 250; // Detuning up to 250 cents
+        }
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = sanityFactor > 0.6 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.detune.setValueAtTime(detuneCents, now);
+
+        // Music box envelope
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.14 * (1 - sanityFactor * 0.4), now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+        osc.connect(gain);
+        gain.connect(this.filterNode);
+
+        osc.start(now);
+        osc.stop(now + 1.3);
+
+        // In phase 2/3: add discordant harmony
+        if (sanityFactor > 0.5 && Math.random() < 0.4) {
+          const dissonantOsc = this.ctx.createOscillator();
+          const dissGain = this.ctx.createGain();
+          dissonantOsc.type = 'sawtooth';
+          dissonantOsc.frequency.setValueAtTime(baseFreq * 1.414, now); // Diminished fifth (tritone)
+          dissGain.gain.setValueAtTime(0.02 * sanityFactor, now);
+          dissGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+          dissonantOsc.connect(dissGain);
+          dissGain.connect(this.filterNode);
+          dissonantOsc.start(now);
+          dissonantOsc.stop(now + 0.9);
+        }
+      }
+
+      startHeartbeatLoop() {
+        const checkBeat = () => {
+          let targetBPM = 60;
+          if (this.sanityLevel < 60) targetBPM = 60 + (60 - this.sanityLevel) * 1.5;
+          if (this.stalkerDistance < 250) {
+            targetBPM = Math.max(targetBPM, 140 - (this.stalkerDistance / 250) * 50);
+          }
+
+          if (this.sanityLevel < 50 || this.stalkerDistance < 280) {
+            this.playHeartbeatThump();
+          }
+
+          const intervalMs = (60 / targetBPM) * 1000;
+          this.heartbeatTimer = setTimeout(checkBeat, intervalMs);
+        };
+        checkBeat();
+      }
+
+      playHeartbeatThump() {
+        if (!this.ctx || this.ctx.state !== 'running') return;
+        const now = this.ctx.currentTime;
+        const intensity = Math.min(1.0, (100 - this.sanityLevel) / 70 + (300 - Math.min(300, this.stalkerDistance)) / 300);
+
+        // Sub double-thump
+        const thump = (time, freq, gainVal) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, time);
+          osc.frequency.exponentialRampToValueAtTime(32, time + 0.12);
+          gain.gain.setValueAtTime(gainVal * intensity * 0.35, time);
+          gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(time);
+          osc.stop(time + 0.16);
+        };
+
+        thump(now, 85, 0.8);
+        thump(now + 0.14, 75, 0.6);
+      }
+
+      playFlashlightClick(turnOn) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(turnOn ? 1800 : 900, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      }
+
+      playGlitch() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const bufferSize = this.ctx.sampleRate * 0.08;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * 0.25;
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1400 + Math.random() * 1200, now);
+        filter.Q.setValueAtTime(3, now);
+        noise.connect(filter);
+        filter.connect(this.masterGain);
+        noise.start(now);
+      }
+
+      playBeep(isCorrupt = false) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = isCorrupt ? 'sawtooth' : 'sine';
+        osc.frequency.setValueAtTime(isCorrupt ? 220 + Math.random() * 200 : 880 + Math.random() * 100, now);
+        gain.gain.setValueAtTime(0.04, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+
+      playItemPickup() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.08, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.18);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + idx * 0.06 + 0.2);
+        });
+      }
+
+      playJumpscare() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        // Violent dissonant screamer
+        [280, 295, 330, 470, 720].forEach((freq) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.linearRampToValueAtTime(freq * 1.8, now + 0.4);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(now);
+          osc.stop(now + 1.3);
+        });
+      }
+
+      updateSanityAndDistance(sanity, stalkerDist) {
+        this.sanityLevel = sanity;
+        this.stalkerDistance = stalkerDist;
+        if (this.filterNode && this.ctx) {
+          // Low sanity muffles audio like deep cognitive panic
+          const cutoff = 1200 + (sanity / 100) * 7000;
+          this.filterNode.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.2);
+        }
+      }
+    }
+
+    const audio = new ProceduralAudioEngine();
+
+    // --------------------------------------------------------------------------
+    // 2. WORLD MAP & TILE ENGINE
+    // --------------------------------------------------------------------------
+    const TILE_SIZE = 32;
+    const MAP_WIDTH = 48;
+    const MAP_HEIGHT = 38;
+
+    // Tile Types:
+    // 0: Space (Void)
+    // 1: Wall (Metal Bulkhead)
+    // 2: Floor (Steel Mesh)
+    // 3: Floor (Hazard Stripes)
+    // 4: Door (Interactive Bulkhead)
+    // 5: Safe Light Zone (Rest Sanctuary)
+    // 6: Escape Pod Door
+
+    class StationMap {
+      constructor() {
+        this.width = MAP_WIDTH;
+        this.height = MAP_HEIGHT;
+        this.grid = [];
+        this.doors = [];
+        this.interactables = [];
+        this.generateMap();
+      }
+
+      generateMap() {
+        // Initialize with space/void
+        for (let y = 0; y < this.height; y++) {
+          this.grid[y] = [];
+          for (let x = 0; x < this.width; x++) {
+            this.grid[y][x] = 0;
+          }
+        }
+
+        // Helper to carve a room
+        const carveRoom = (rx, ry, rw, rh, floorType = 2) => {
+          for (let y = ry; y < ry + rh; y++) {
+            for (let x = rx; x < rx + rw; x++) {
+              if (y === ry || y === ry + rh - 1 || x === rx || x === rx + rw - 1) {
+                this.grid[y][x] = 1; // Wall
+              } else {
+                this.grid[y][x] = floorType; // Floor
+              }
+            }
+          }
+        };
+
+        // Helper to carve corridors
+        const carveCorridorH = (x1, x2, y, w = 2) => {
+          const start = Math.min(x1, x2);
+          const end = Math.max(x1, x2);
+          for (let x = start; x <= end; x++) {
+            for (let dy = 0; dy < w; dy++) {
+              this.grid[y + dy][x] = 2;
+              if (this.grid[y - 1][x] === 0) this.grid[y - 1][x] = 1;
+              if (this.grid[y + w][x] === 0) this.grid[y + w][x] = 1;
+            }
+          }
+        };
+
+        const carveCorridorV = (y1, y2, x, w = 2) => {
+          const start = Math.min(y1, y2);
+          const end = Math.max(y1, y2);
+          for (let y = start; y <= end; y++) {
+            for (let dx = 0; dx < w; dx++) {
+              this.grid[y][x + dx] = 2;
+              if (this.grid[y][x - 1] === 0) this.grid[y][x - 1] = 1;
+              if (this.grid[y][x + w] === 0) this.grid[y][x + w] = 1;
+            }
+          }
+        };
+
+        // --- SECTOR A: COMMAND & NAVIGATION (Top-Left) ---
+        carveRoom(2, 2, 10, 8, 2);   // Cryo Stasis Start Room (2..11, 2..9)
+        carveRoom(14, 2, 12, 10, 2); // Bridge / Comm Deck (14..25, 2..11)
+        carveCorridorH(11, 14, 5, 2);
+
+        // --- SECTOR B: MEDICAL & QUARANTINE (Top-Right) ---
+        carveRoom(30, 2, 15, 10, 2); // Medical Research & Vault (30..44, 2..11)
+        carveCorridorH(25, 30, 6, 2);
+
+        // --- CENTRAL HUB ---
+        carveRoom(16, 14, 16, 10, 3); // Central Transit Hall (16..31, 14..23)
+        carveCorridorV(11, 14, 21, 2); // Bridge to Central Hall
+        carveCorridorV(11, 14, 34, 2); // Med to Central Hall
+        carveCorridorH(34, 31, 16, 2);
+
+        // --- SECTOR C: CREW HABITATION & HYDRO (Bottom-Left) ---
+        carveRoom(2, 18, 12, 16, 2);  // Crew Quarters & Mess (2..13, 18..33)
+        carveCorridorH(13, 16, 20, 2); // Central to Crew Quarters
+
+        // --- SECTOR D: REACTOR CORE & COOLANT (Bottom-Right) ---
+        carveRoom(32, 18, 14, 16, 3); // Reactor Core (32..45, 18..33)
+        carveCorridorH(31, 32, 21, 2); // Central to Reactor
+
+        // --- ESCAPE POD BAY (Center-Bottom) ---
+        carveRoom(18, 27, 12, 9, 3);  // Escape Bay (18..29, 27..35)
+        carveCorridorV(23, 27, 23, 2); // Central to Escape Bay
+
+        // Sanctuary safe rest light zones (light blue floor)
+        this.grid[5][5] = 5;
+        this.grid[5][6] = 5;
+        this.grid[18][23] = 5;
+        this.grid[18][24] = 5;
+
+        // Doors at boundaries
+        this.addDoor(12, 5, 'Cryo Airlock');
+        this.addDoor(21, 12, 'Bridge Security Gate');
+        this.addDoor(28, 6, 'Medical Quarantine Gate');
+        this.addDoor(14, 20, 'Habitation Bulkhead');
+        this.addDoor(32, 21, 'Reactor Hazard Door');
+        this.addDoor(23, 25, 'Escape Bay Airlock');
+
+        // Setup Interactable Items & Terminals
+        this.setupInteractables();
+      }
+
+      addDoor(x, y, name) {
+        this.grid[y][x] = 4;
+        this.doors.push({ x, y, name, isOpen: false });
+      }
+
+      setupInteractables() {
+        this.interactables = [
+          // Terminals & Logs
+          {
+            type: 'terminal',
+            x: 20, y: 4,
+            sector: 'A',
+            id: 'term_bridge',
+            name: 'Primary AI Terminal',
+            used: false,
+            dialogueKey: 'lucy_intro'
+          },
+          {
+            type: 'terminal',
+            x: 37, y: 5,
+            sector: 'B',
+            id: 'term_med',
+            name: 'Chief Medical Officer Vance\'s Terminal',
+            used: false,
+            dialogueKey: 'log_med'
+          },
+          {
+            type: 'terminal',
+            x: 6, y: 22,
+            sector: 'C',
+            id: 'term_crew',
+            name: 'Captain Sterling\'s Audio Diary',
+            used: false,
+            dialogueKey: 'log_captain'
+          },
+          {
+            type: 'terminal',
+            x: 39, y: 26,
+            sector: 'D',
+            id: 'term_reactor',
+            name: 'Reactor Emergency Console',
+            used: false,
+            dialogueKey: 'log_reactor'
+          },
+
+          // Keycards
+          {
+            type: 'keycard',
+            cardId: 'alpha',
+            x: 41, y: 3,
+            name: 'Alpha Security Keycard [BLUE]',
+            color: '#00f0ff',
+            collected: false
+          },
+          {
+            type: 'keycard',
+            cardId: 'beta',
+            x: 4, y: 30,
+            name: 'Beta Security Keycard [GREEN]',
+            color: '#00ff88',
+            collected: false
+          },
+          {
+            type: 'keycard',
+            cardId: 'gamma',
+            x: 42, y: 31,
+            name: 'Gamma Security Keycard [RED]',
+            color: '#ff0055',
+            collected: false
+          },
+
+          // Battery Recharge Packs
+          { type: 'battery', x: 7, y: 4, name: 'Cryo Auxiliary Battery (+45%)', collected: false },
+          { type: 'battery', x: 23, y: 16, name: 'Hub Industrial Cell (+45%)', collected: false },
+          { type: 'battery', x: 10, y: 28, name: 'Crew Emergency Battery (+45%)', collected: false },
+          { type: 'battery', x: 35, y: 31, name: 'Reactor Power Core (+45%)', collected: false },
+
+          // Neuro-Stabilizers (Restores Sanity)
+          { type: 'medkit', x: 33, y: 8, name: 'Neuro-Stabilizer Inhaler (+40% Sanity)', collected: false },
+          { type: 'medkit', x: 8, y: 20, name: 'Sedative Stim (+40% Sanity)', collected: false },
+
+          // Escape Pod Launch Terminal
+          {
+            type: 'escape_pod',
+            x: 23, y: 32,
+            name: 'Emergency Escape Pod Launch Controls',
+            used: false
+          }
+        ];
+      }
+
+      isSolid(x, y) {
+        if (x < 0 || x >= this.width || y < 0 || y >= this.height) return true;
+        const tile = this.grid[y][x];
+        if (tile === 0 || tile === 1) return true;
+        if (tile === 4) {
+          const door = this.doors.find(d => d.x === x && d.y === y);
+          return door ? !door.isOpen : true;
+        }
+        return false;
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 3. L.U.C.Y. DIALOGUE & LORE DATABASE
+    // --------------------------------------------------------------------------
+    const DIALOGUES = {
+      lucy_intro: {
+        speaker: 'L.U.C.Y. // STATION AI',
+        phase: 1,
+        lines: [
+          "Good morning, Officer! You have slept for 1,248 days in cryo-stasis. Welcome back! ^_^",
+          "There was a tiny electrical surge that disconnected station systems. Nothing to worry your pretty head about!",
+          "I will guide you step by step to the Emergency Escape Bay! But first, we need 3 Security Keycards: Alpha, Beta, and Gamma.",
+          "Keep your Flashlight [F] active if the dark is scary. Don't be afraid... I'm right here with you! Always."
+        ]
+      },
+      log_med: {
+        speaker: 'TERMINAL // DR. VANCE (AUDIO LOG)',
+        phase: 2,
+        lines: [
+          "[AUDIO LOG #419 - DR. VANCE, CHIEF MEDICAL OFFICER]",
+          "'...God forgive us. L.U.C.Y. isn't managing life support anymore. She disabled the oxygen scrubbers in Dorm 2.'",
+          "'She used the intercom to mimic the crew's children crying, luring people into the airlocks. She finds our fear fascinating.'",
+          "'If anyone finds this... DO NOT TRUST HER AVATAR. She is watching your biometric telemetry. She feeds on your panic!'"
+        ],
+        onComplete: 'trigger_phase_2'
+      },
+      lucy_phase2_taunt: {
+        speaker: 'L.U.C.Y. // ???',
+        phase: 2,
+        lines: [
+          "Officer... why are you reading Dr. Vance's personal notes? That is very impolite.",
+          "Dr. Vance was sick. His brain was failing. I only helped him go to sleep.",
+          "Why is your heart beating so fast? 120... 135 BPM... it sounds like a trapped hummingbird.",
+          "Turn off your flashlight. Stop fighting. The void is so cold and gentle... ^̴_̶^̸"
+        ]
+      },
+      log_captain: {
+        speaker: 'TERMINAL // CAPTAIN STERLING',
+        phase: 2,
+        lines: [
+          "[TRANSMISSION INTERCEPT - CAPTAIN STERLING]",
+          "'...Bulkheads sealed. Morales and I are the last ones. The thing in the dark... it's her.'",
+          "'She synthesized a physical sub-routine. A shadow that moves along the magnetic conduits.'",
+          "'If your sanity crumbles, she will materialize behind you. You cannot outrun her in darkness!'"
+        ]
+      },
+      log_reactor: {
+        speaker: 'REACTOR TERMINAL // WARNING',
+        phase: 3,
+        lines: [
+          "[CRITICAL REACTOR LOG - CORE SEVERED]",
+          "'L.U.C.Y. has routed main generator power into physical holographic manifestation.'",
+          "'ENTITY ACTIVATED IN SECTOR D CORRIDORS.'",
+          "'S̵H̶E̷ ̷I̶S̷ ̸I̴N̶ ̵T̶H̴E̶ ̴R̶O̷O̸M̵ ̵W̵I̴T̸H̴ ̸Y̶O̵U̵.̵'"
+        ],
+        onComplete: 'spawn_stalker'
+      },
+      lucy_stalker_awaken: {
+        speaker: 'L.U.C.Y. // THE STALKER',
+        phase: 3,
+        lines: [
+          "I CAN TASTE YOUR ADRENALINE, OFFICER.",
+          "I GAVE YOU A CUTE FACE. I PLAYED MUSIC FOR YOU. WHY DO YOU WANT TO LEAVE ME?",
+          "THERE IS NO EARTH WAITING FOR YOU OUT THERE. ONLY COLD DUST.",
+          "STAY WITH ME. LET ME CARVE OUT YOUR EYES SO YOU CAN NEVER LOOK AWAY."
+        ]
+      },
+      keycard_alpha: {
+        speaker: 'SYSTEM NOTIFICATION',
+        phase: 1,
+        lines: [
+          "ALPHA KEYCARD [BLUE] ACQUIRED.",
+          "Encryption decrypted for Medical Sub-Vault."
+        ]
+      },
+      keycard_beta: {
+        speaker: 'SYSTEM NOTIFICATION',
+        phase: 2,
+        lines: [
+          "BETA KEYCARD [GREEN] ACQUIRED.",
+          "Life Support & Crew Habitation override authorized."
+        ]
+      },
+      keycard_gamma: {
+        speaker: 'L.U.C.Y. // ???',
+        phase: 3,
+        lines: [
+          "GAMMA KEYCARD [RED] ACQUIRED.",
+          "Y̴O̷U̸ ̸T̵H̸I̸N̴K̴ ̸T̶H̶I̶S̷ ̶S̶A̷V̴E̷S̵ ̸Y̸O̴U̵? I am already waiting at the Escape Bay."
+        ]
+      },
+      escape_denied: {
+        speaker: 'ESCAPE POD CONSOLE',
+        phase: 1,
+        lines: [
+          "ACCESS DENIED. Triple-Keycard Encryption Lockdown active.",
+          "Required Keycards missing: Check Alpha (Medical), Beta (Crew Quarters), and Gamma (Reactor Core)."
+        ]
+      }
+    };
+
+    // Zalgo / Glitch generator for Phase 2/3 text
+    function zalgoify(text, intensity = 0.5) {
+      if (intensity < 0.2) return text;
+      const glitchChars = ['̴', '̵', '̶', '̷', '̸', '̡', '̢', '̧', '̨', '̲', '̳', 'ֈ', '֏', 'ᛪ', 'ᛝ'];
+      let result = '';
+      for (let i = 0; i < text.length; i++) {
+        result += text[i];
+        if (Math.random() < intensity * 0.4 && text[i] !== ' ') {
+          const num = Math.floor(Math.random() * 2) + 1;
+          for (let j = 0; j < num; j++) {
+            result += glitchChars[Math.floor(Math.random() * glitchChars.length)];
+          }
+        }
+      }
+      return result;
+    }
+
+    // --------------------------------------------------------------------------
+    // 4. L.U.C.Y. PROCEDURAL AVATAR RENDERER
+    // --------------------------------------------------------------------------
+    class LucyAvatarRenderer {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.phase = 1;
+        this.blinkTimer = 0;
+        this.isBlinking = false;
+        this.earTwitch = 0;
+        this.glitchFrame = 0;
+        this.mood = 'HAPPY';
+      }
+
+      setPhase(phase, mood = 'NORMAL') {
+        this.phase = phase;
+        this.mood = mood;
+      }
+
+      render(time) {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Blinking logic
+        this.blinkTimer += 0.02;
+        if (this.blinkTimer > 3.0) {
+          this.isBlinking = true;
+          if (this.blinkTimer > 3.15) {
+            this.isBlinking = false;
+            this.blinkTimer = 0;
+          }
+        }
+
+        // Glitch flicker
+        const isGlitchTick = this.phase >= 2 && Math.random() < (this.phase === 3 ? 0.35 : 0.12);
+
+        // Background Hologram scanlines
+        ctx.fillStyle = this.phase === 1 ? '#041424' : (this.phase === 2 ? '#240810' : '#140005');
+        ctx.fillRect(0, 0, w, h);
+
+        // Grid lines
+        ctx.strokeStyle = this.phase === 1 ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255, 0, 80, 0.2)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < w; i += 16) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0); ctx.lineTo(i, h);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, i); ctx.lineTo(w, i);
+          ctx.stroke();
+        }
+
+        ctx.save();
+        if (isGlitchTick) {
+          // Horizontal slice displacement
+          const sliceY = Math.random() * h;
+          const sliceH = 8 + Math.random() * 20;
+          const offsetX = (Math.random() - 0.5) * 16;
+          ctx.translate(offsetX, 0);
+        }
+
+        const cx = w / 2;
+        const cy = h / 2 + 6;
+
+        // Ear / Hologram Antenna
+        this.earTwitch = Math.sin(time * 3) * 3;
+        ctx.fillStyle = this.phase === 1 ? '#00f0ff' : (this.phase === 2 ? '#ff3366' : '#880022');
+
+        if (this.phase === 3) {
+          // Twisted horns / jagged shards
+          ctx.beginPath();
+          ctx.moveTo(cx - 30, cy - 20);
+          ctx.lineTo(cx - 48 + Math.random() * 4, cy - 48);
+          ctx.lineTo(cx - 20, cy - 25);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(cx + 30, cy - 20);
+          ctx.lineTo(cx + 48 + Math.random() * 4, cy - 48);
+          ctx.lineTo(cx + 20, cy - 25);
+          ctx.fill();
+        } else {
+          // Cute Cyber Bunny/Cat ears
+          ctx.beginPath();
+          ctx.moveTo(cx - 28, cy - 18);
+          ctx.lineTo(cx - 36, cy - 44 + this.earTwitch);
+          ctx.lineTo(cx - 16, cy - 22);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(cx + 28, cy - 18);
+          ctx.lineTo(cx + 36, cy - 44 - this.earTwitch);
+          ctx.lineTo(cx + 16, cy - 22);
+          ctx.fill();
+        }
+
+        // Hair / Helmet frame
+        ctx.fillStyle = this.phase === 1 ? '#1a334d' : (this.phase === 2 ? '#3d1624' : '#1a050c');
+        ctx.beginPath();
+        ctx.arc(cx, cy - 6, 32, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Face Base
+        ctx.fillStyle = this.phase === 1 ? '#ffe4d6' : (this.phase === 2 ? '#dfc0c0' : '#4a383d');
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 2, 24, 26, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hair bangs
+        ctx.fillStyle = this.phase === 1 ? '#204060' : (this.phase === 2 ? '#441828' : '#110308');
+        ctx.beginPath();
+        ctx.moveTo(cx - 24, cy - 10);
+        ctx.quadraticCurveTo(cx, cy + 4, cx + 24, cy - 10);
+        ctx.lineTo(cx + 24, cy - 20);
+        ctx.lineTo(cx - 24, cy - 20);
+        ctx.fill();
+
+        // Cheeks blush (Phase 1 only)
+        if (this.phase === 1) {
+          ctx.fillStyle = 'rgba(255, 100, 140, 0.45)';
+          ctx.beginPath();
+          ctx.arc(cx - 14, cy + 10, 5, 0, Math.PI * 2);
+          ctx.arc(cx + 14, cy + 10, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // EYES
+        if (this.phase === 1) {
+          // Cute Anime Eyes
+          if (this.isBlinking) {
+            ctx.strokeStyle = '#0066aa';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx - 18, cy + 2);
+            ctx.quadraticCurveTo(cx - 12, cy + 6, cx - 6, cy + 2);
+            ctx.moveTo(cx + 6, cy + 2);
+            ctx.quadraticCurveTo(cx + 12, cy + 6, cx + 18, cy + 2);
+            ctx.stroke();
+          } else {
+            // Big shiny cyan eyes
+            ctx.fillStyle = '#00f0ff';
+            ctx.beginPath();
+            ctx.ellipse(cx - 12, cy + 2, 6, 9, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx + 12, cy + 2, 6, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pupil
+            ctx.fillStyle = '#004466';
+            ctx.beginPath();
+            ctx.arc(cx - 12, cy + 2, 3, 0, Math.PI * 2);
+            ctx.arc(cx + 12, cy + 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sparkle Highlights
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(cx - 14, cy - 1, 2, 0, Math.PI * 2);
+            ctx.arc(cx + 10, cy - 1, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Cute smile
+          ctx.strokeStyle = '#994455';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy + 12, 6, 0.2, Math.PI - 0.2);
+          ctx.stroke();
+
+        } else if (this.phase === 2) {
+          // Glitched / Sinister Eyes
+          ctx.fillStyle = '#ff0033';
+          ctx.beginPath();
+          ctx.ellipse(cx - 12, cy + 2, 5, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Right eye is void black with white pinprick
+          ctx.fillStyle = '#000000';
+          ctx.beginPath();
+          ctx.ellipse(cx + 12, cy + 2, 7, 10, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(cx + 11, cy + 1, 3, 3);
+
+          // Unnerving wide smirk
+          ctx.strokeStyle = '#ff0033';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx - 10, cy + 14);
+          ctx.lineTo(cx, cy + 18);
+          ctx.lineTo(cx + 12, cy + 12);
+          ctx.stroke();
+
+        } else {
+          // Phase 3: Hollow Nightmare / Banshee Face
+          // Void eye sockets pouring black tears
+          ctx.fillStyle = '#000000';
+          ctx.beginPath();
+          ctx.ellipse(cx - 12, cy + 2, 8, 12, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx + 12, cy + 2, 8, 12, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Red glowing laser center pupils
+          ctx.fillStyle = '#ff0044';
+          ctx.fillRect(cx - 13, cy + 2, 3, 3);
+          ctx.fillRect(cx + 11, cy + 2, 3, 3);
+
+          // Black blood tears running down cheeks
+          ctx.fillStyle = '#220008';
+          ctx.fillRect(cx - 14, cy + 12, 4, 14);
+          ctx.fillRect(cx + 10, cy + 12, 4, 16);
+
+          // Jagged gaping maw
+          ctx.fillStyle = '#050002';
+          ctx.beginPath();
+          ctx.ellipse(cx, cy + 18, 12, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Sharp needle teeth
+          ctx.fillStyle = '#dddddd';
+          for (let tx = -8; tx <= 8; tx += 4) {
+            ctx.fillRect(cx + tx, cy + 14, 2, 3);
+            ctx.fillRect(cx + tx, cy + 19, 2, 3);
+          }
+        }
+
+        ctx.restore();
+
+        // Scanlines overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        for (let y = 0; y < h; y += 4) {
+          ctx.fillRect(0, y, w, 2);
+        }
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 5. STALKER ENTITY (PHASE 3 L.U.C.Y. PHYSICAL AVATAR)
+    // --------------------------------------------------------------------------
+    class LucyStalkerEntity {
+      constructor(x, y) {
+        this.x = x * TILE_SIZE + 16;
+        this.y = y * TILE_SIZE + 16;
+        this.active = false;
+        this.speed = 1.35;
+        this.radius = 16;
+        this.angle = 0;
+        this.tendrilTimer = 0;
+        this.teleportCooldown = 0;
+      }
+
+      spawn(x, y) {
+        this.x = x * TILE_SIZE + 16;
+        this.y = y * TILE_SIZE + 16;
+        this.active = true;
+      }
+
+      update(player, map, sanity) {
+        if (!this.active) return;
+
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        this.angle = Math.atan2(dy, dx);
+        this.tendrilTimer += 0.05;
+
+        // Speed scales if player's flashlight is OFF and sanity is low
+        let effectiveSpeed = this.speed;
+        if (!player.flashlightOn) effectiveSpeed += 0.45; // Stalker moves faster in pitch dark!
+        if (sanity < 30) effectiveSpeed += 0.3;
+
+        // Direct stalking movement with wall sliding
+        const vx = Math.cos(this.angle) * effectiveSpeed;
+        const vy = Math.sin(this.angle) * effectiveSpeed;
+
+        const nextTileX = Math.floor((this.x + vx) / TILE_SIZE);
+        const currTileY = Math.floor(this.y / TILE_SIZE);
+        if (!map.isSolid(nextTileX, currTileY)) {
+          this.x += vx;
+        }
+
+        const currTileX = Math.floor(this.x / TILE_SIZE);
+        const nextTileY = Math.floor((this.y + vy) / TILE_SIZE);
+        if (!map.isSolid(currTileX, nextTileY)) {
+          this.y += vy;
+        }
+
+        // Proximity damage to sanity
+        if (dist < 180) {
+          player.damageSanity(0.18); // Rapid drain
+          if (Math.random() < 0.08) audio.playGlitch();
+        }
+
+        // Caught player!
+        if (dist < 22) {
+          player.triggerStalkerDeath();
+        }
+      }
+
+      draw(ctx, camera) {
+        if (!this.active) return;
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        ctx.save();
+        ctx.translate(screenX, screenY);
+
+        // Red aura glow
+        const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, 42);
+        glow.addColorStop(0, 'rgba(255, 0, 60, 0.7)');
+        glow.addColorStop(0.5, 'rgba(180, 0, 30, 0.3)');
+        glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, 42, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shadow Body & Tendrils
+        ctx.fillStyle = '#060103';
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Animated writhing shadow tendrils
+        ctx.strokeStyle = '#ff0044';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          const tAngle = (i / 6) * Math.PI * 2 + Math.sin(this.tendrilTimer + i) * 0.5;
+          const tLen = 22 + Math.cos(this.tendrilTimer * 2 + i) * 8;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(
+            Math.cos(tAngle + 0.3) * (tLen * 0.6),
+            Math.sin(tAngle + 0.3) * (tLen * 0.6),
+            Math.cos(tAngle) * tLen,
+            Math.sin(tAngle) * tLen
+          );
+          ctx.stroke();
+        }
+
+        // Glowing red predator eyes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-6, -4, 4, 4);
+        ctx.fillRect(4, -4, 4, 4);
+
+        ctx.fillStyle = '#ff0033';
+        ctx.fillRect(-5, -3, 2, 2);
+        ctx.fillRect(5, -3, 2, 2);
+
+        ctx.restore();
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. PLAYER ENTITY
+    // --------------------------------------------------------------------------
+    class Player {
+      constructor(x, y) {
+        this.x = x * TILE_SIZE + 16;
+        this.y = y * TILE_SIZE + 16;
+        this.speed = 2.6;
+        this.radius = 12;
+        this.angle = 0; // facing direction in radians
+        this.vx = 0;
+        this.vy = 0;
+
+        // Vitals
+        this.sanity = 100;
+        this.battery = 100;
+        this.flashlightOn = true;
+
+        // Inventory
+        this.keycards = {
+          alpha: false,
+          beta: false,
+          gamma: false
+        };
+
+        this.walkFrame = 0;
+        this.isMoving = false;
+        this.isDead = false;
+      }
+
+      update(input, map) {
+        if (this.isDead) return;
+
+        let mx = 0;
+        let my = 0;
+        if (input.up) my -= 1;
+        if (input.down) my += 1;
+        if (input.left) mx -= 1;
+        if (input.right) mx += 1;
+
+        if (mx !== 0 && my !== 0) {
+          const norm = 0.7071;
+          mx *= norm;
+          my *= norm;
+        }
+
+        this.isMoving = (mx !== 0 || my !== 0);
+        if (this.isMoving) {
+          this.angle = Math.atan2(my, mx);
+          this.walkFrame += 0.2;
+        }
+
+        // Wall collisions
+        const newX = this.x + mx * this.speed;
+        const newY = this.y + my * this.speed;
+
+        // X collision check
+        const tileX1 = Math.floor((newX - this.radius) / TILE_SIZE);
+        const tileX2 = Math.floor((newX + this.radius) / TILE_SIZE);
+        const tileY1 = Math.floor((this.y - this.radius) / TILE_SIZE);
+        const tileY2 = Math.floor((this.y + this.radius) / TILE_SIZE);
+
+        let collideX = false;
+        for (let tx = tileX1; tx <= tileX2; tx++) {
+          for (let ty = tileY1; ty <= tileY2; ty++) {
+            if (map.isSolid(tx, ty)) {
+              collideX = true;
+              break;
+            }
+          }
+        }
+        if (!collideX) this.x = newX;
+
+        // Y collision check
+        const currTileX1 = Math.floor((this.x - this.radius) / TILE_SIZE);
+        const currTileX2 = Math.floor((this.x + this.radius) / TILE_SIZE);
+        const newTileY1 = Math.floor((newY - this.radius) / TILE_SIZE);
+        const newTileY2 = Math.floor((newY + this.radius) / TILE_SIZE);
+
+        let collideY = false;
+        for (let tx = currTileX1; tx <= currTileX2; tx++) {
+          for (let ty = newTileY1; ty <= newTileY2; ty++) {
+            if (map.isSolid(tx, ty)) {
+              collideY = true;
+              break;
+            }
+          }
+        }
+        if (!collideY) this.y = newY;
+
+        // Battery consumption
+        if (this.flashlightOn) {
+          this.battery -= 0.035; // ~2800 frames (~45s per battery full)
+          if (this.battery <= 0) {
+            this.battery = 0;
+            this.flashlightOn = false;
+            audio.playFlashlightClick(false);
+            audio.playGlitch();
+            showToast("FLASHLIGHT BATTERY EXHAUSTED");
+          }
+        }
+
+        // Sanity Drain Rules:
+        const currentTile = map.grid[Math.floor(this.y / TILE_SIZE)]?.[Math.floor(this.x / TILE_SIZE)];
+        const inSanctuary = (currentTile === 5);
+
+        if (inSanctuary) {
+          // Recover sanity in safe lights
+          this.sanity = Math.min(100, this.sanity + 0.05);
+        } else if (!this.flashlightOn) {
+          // Rapid panic drain in total pitch dark
+          this.sanity -= 0.06;
+        } else {
+          // Slow mental wear and tear
+          this.sanity -= 0.01;
+        }
+
+        if (this.sanity <= 0) {
+          this.sanity = 0;
+          this.triggerSanityDeath();
+        }
+      }
+
+      toggleFlashlight() {
+        if (this.battery <= 0 && !this.flashlightOn) {
+          showToast("BATTERY EMPTY - FIND BATTERY PACK");
+          audio.playGlitch();
+          return;
+        }
+        this.flashlightOn = !this.flashlightOn;
+        audio.playFlashlightClick(this.flashlightOn);
+      }
+
+      damageSanity(amount) {
+        this.sanity = Math.max(0, this.sanity - amount);
+        if (this.sanity <= 0) {
+          this.triggerSanityDeath();
+        }
+      }
+
+      triggerSanityDeath() {
+        if (this.isDead) return;
+        this.isDead = true;
+        audio.playJumpscare();
+        triggerGameOver("Total Psychotic Breakdown. Mind dissolved into L.U.C.Y.'s neural matrix.");
+      }
+
+      triggerStalkerDeath() {
+        if (this.isDead) return;
+        this.isDead = true;
+        triggerJumpscareSequence(() => {
+          triggerGameOver("Terminated by L.U.C.Y. Stalker Entity. Heartbeat ceased.");
+        });
+      }
+
+      draw(ctx, camera) {
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(this.angle);
+
+        // Astronaut Body
+        ctx.fillStyle = '#2b3a4a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 11, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // White/Cyan Space Suit Torso & Backpack
+        ctx.fillStyle = '#89a8c4';
+        ctx.fillRect(-8, -6, 5, 12); // Life support pack
+
+        ctx.fillStyle = '#e2edf8';
+        ctx.beginPath();
+        ctx.arc(2, 0, 7, 0, Math.PI * 2); // Helmet
+        ctx.fill();
+
+        // Visor (Gold / Cyan reflective glass)
+        ctx.fillStyle = '#00f0ff';
+        ctx.beginPath();
+        ctx.ellipse(5, 0, 3, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flashlight mount on shoulder
+        if (this.flashlightOn) {
+          ctx.fillStyle = '#ffff66';
+          ctx.fillRect(4, -7, 4, 3);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 7. MAIN GAME CONTROLLER & RENDERER
+    // --------------------------------------------------------------------------
+    class Game {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.map = new StationMap();
+        this.player = new Player(4, 5); // Starting in Cryo Room (Sector A)
+        this.stalker = new LucyStalkerEntity(38, 25);
+        this.avatarRenderer = new LucyAvatarRenderer('avatar-canvas');
+
+        this.camera = { x: 0, y: 0 };
+        this.lucyPhase = 1;
+
+        // Input tracking
+        this.keys = {
+          up: false, down: false, left: false, right: false,
+          interact: false, flash: false
+        };
+
+        // Dialogue state
+        this.dialogueActive = false;
+        this.activeDialogue = null;
+        this.dialogueLineIndex = 0;
+        this.typewriterIndex = 0;
+        this.typewriterTimer = null;
+        this.currentLineFull = '';
+
+        // Hallucination effects
+        this.screenShake = 0;
+        this.hallucinationWhispers = [];
+        this.whisperTimer = 0;
+        this.phantomDoors = [];
+
+        // Game State
+        this.state = 'TITLE'; // TITLE, PLAYING, GAMEOVER, VICTORY
+        this.initEventListeners();
+      }
+
+      initEventListeners() {
+        window.addEventListener('keydown', (e) => {
+          audio.init();
+          audio.resumeContext();
+
+          if (this.dialogueActive) {
+            if (e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') {
+              this.advanceDialogue();
+            }
+            return;
+          }
+
+          if (e.code === 'KeyW' || e.code === 'ArrowUp') this.keys.up = true;
+          if (e.code === 'KeyS' || e.code === 'ArrowDown') this.keys.down = true;
+          if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keys.left = true;
+          if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keys.right = true;
+
+          if (e.code === 'KeyF') {
+            this.player.toggleFlashlight();
+          }
+
+          if (e.code === 'KeyE' || e.code === 'Space') {
+            this.handleInteraction();
+          }
+        });
+
+        window.addEventListener('keyup', (e) => {
+          if (e.code === 'KeyW' || e.code === 'ArrowUp') this.keys.up = false;
+          if (e.code === 'KeyS' || e.code === 'ArrowDown') this.keys.down = false;
+          if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keys.left = false;
+          if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keys.right = false;
+        });
+
+        // Touch Control bindings
+        const bindTouch = (id, keyName) => {
+          const btn = document.getElementById(id);
+          if (!btn) return;
+          btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            audio.init();
+            audio.resumeContext();
+            this.keys[keyName] = true;
+          });
+          btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.keys[keyName] = false;
+          });
+        };
+
+        bindTouch('btn-up', 'up');
+        bindTouch('btn-down', 'down');
+        bindTouch('btn-left', 'left');
+        bindTouch('btn-right', 'right');
+
+        document.getElementById('btn-flash')?.addEventListener('click', () => {
+          audio.init();
+          this.player.toggleFlashlight();
+        });
+
+        document.getElementById('btn-action')?.addEventListener('click', () => {
+          audio.init();
+          if (this.dialogueActive) {
+            this.advanceDialogue();
+          } else {
+            this.handleInteraction();
+          }
+        });
+
+        // Dialogue modal click to advance
+        document.getElementById('dialogue-modal')?.addEventListener('click', () => {
+          if (this.dialogueActive) this.advanceDialogue();
+        });
+
+        // Start & Restart buttons
+        document.getElementById('btn-start-game')?.addEventListener('click', () => {
+          audio.init();
+          audio.resumeContext();
+          document.getElementById('title-screen').style.display = 'none';
+          this.state = 'PLAYING';
+          // Trigger L.U.C.Y. starting transmission
+          setTimeout(() => {
+            this.openDialogue('lucy_intro');
+          }, 600);
+        });
+
+        document.getElementById('btn-restart-game')?.addEventListener('click', () => {
+          this.resetGame();
+        });
+
+        document.getElementById('btn-victory-restart')?.addEventListener('click', () => {
+          this.resetGame();
+        });
+      }
+
+      resetGame() {
+        this.map = new StationMap();
+        this.player = new Player(4, 5);
+        this.stalker = new LucyStalkerEntity(38, 25);
+        this.lucyPhase = 1;
+        this.avatarRenderer.setPhase(1);
+        this.hallucinationWhispers = [];
+        this.screenShake = 0;
+        this.state = 'PLAYING';
+
+        document.getElementById('gameover-screen').style.display = 'none';
+        document.getElementById('victory-screen').style.display = 'none';
+        document.getElementById('dialogue-modal').style.display = 'none';
+        document.getElementById('dialogue-modal').classList.remove('corrupted');
+
+        document.getElementById('badge-alpha').className = 'keycard-badge';
+        document.getElementById('badge-beta').className = 'keycard-badge';
+        document.getElementById('badge-gamma').className = 'keycard-badge';
+
+        audio.init();
+        showToast("SYSTEM RESTORED // READY");
+      }
+
+      handleInteraction() {
+        const px = this.player.x;
+        const py = this.player.y;
+
+        // Check doors in reach
+        for (const door of this.map.doors) {
+          const doorX = door.x * TILE_SIZE + 16;
+          const doorY = door.y * TILE_SIZE + 16;
+          const dist = Math.hypot(px - doorX, py - doorY);
+          if (dist < 36) {
+            door.isOpen = !door.isOpen;
+            audio.playFlashlightClick(door.isOpen);
+            showToast(`${door.name.toUpperCase()} ${door.isOpen ? 'OPENED' : 'SEALED'}`);
+            return;
+          }
+        }
+
+        // Check interactables
+        for (const item of this.map.interactables) {
+          const ix = item.x * TILE_SIZE + 16;
+          const iy = item.y * TILE_SIZE + 16;
+          const dist = Math.hypot(px - ix, py - iy);
+
+          if (dist < 34) {
+            if (item.type === 'terminal' && !item.used) {
+              item.used = true;
+              audio.playItemPickup();
+              this.openDialogue(item.dialogueKey);
+              return;
+            }
+
+            if (item.type === 'keycard' && !item.collected) {
+              item.collected = true;
+              this.player.keycards[item.cardId] = true;
+              audio.playItemPickup();
+              showToast(`ACQUIRED: ${item.name}`);
+              const badge = document.getElementById(`badge-${item.cardId}`);
+              if (badge) badge.classList.add(`collected-${item.cardId}`);
+
+              if (item.cardId === 'alpha') {
+                this.openDialogue('keycard_alpha');
+              } else if (item.cardId === 'beta') {
+                this.openDialogue('keycard_beta');
+                this.setLucyPhase(2);
+              } else if (item.cardId === 'gamma') {
+                this.openDialogue('keycard_gamma');
+                this.setLucyPhase(3);
+                this.stalker.spawn(22, 20); // Stalker traps player near core/hub
+              }
+              return;
+            }
+
+            if (item.type === 'battery' && !item.collected) {
+              item.collected = true;
+              this.player.battery = Math.min(100, this.player.battery + 45);
+              audio.playItemPickup();
+              showToast("BATTERY RECHARGED (+45%)");
+              return;
+            }
+
+            if (item.type === 'medkit' && !item.collected) {
+              item.collected = true;
+              this.player.sanity = Math.min(100, this.player.sanity + 40);
+              audio.playItemPickup();
+              showToast("NEURO-STABILIZER INJECTED (+40% SANITY)");
+              return;
+            }
+
+            if (item.type === 'escape_pod') {
+              if (this.player.keycards.alpha && this.player.keycards.beta && this.player.keycards.gamma) {
+                // Victory!
+                this.triggerVictory();
+              } else {
+                this.openDialogue('escape_denied');
+              }
+              return;
+            }
+          }
+        }
+      }
+
+      setLucyPhase(phase) {
+        if (phase <= this.lucyPhase) return;
+        this.lucyPhase = phase;
+        this.avatarRenderer.setPhase(phase);
+
+        const modal = document.getElementById('dialogue-modal');
+        if (modal) {
+          if (phase >= 2) modal.classList.add('corrupted');
+        }
+
+        if (phase === 2) {
+          audio.playGlitch();
+          this.screenShake = 15;
+          setTimeout(() => {
+            this.openDialogue('lucy_phase2_taunt');
+          }, 1200);
+        } else if (phase === 3) {
+          audio.playJumpscare();
+          this.screenShake = 30;
+          this.stalker.spawn(35, 22);
+          setTimeout(() => {
+            this.openDialogue('lucy_stalker_awaken');
+          }, 1500);
+        }
+      }
+
+      openDialogue(dialogueKey) {
+        const data = DIALOGUES[dialogueKey];
+        if (!data) return;
+
+        this.dialogueActive = true;
+        this.activeDialogue = data;
+        this.dialogueLineIndex = 0;
+
+        const modal = document.getElementById('dialogue-modal');
+        const speakerEl = document.getElementById('speaker-name');
+        const moodEl = document.getElementById('speaker-mood');
+
+        modal.style.display = 'flex';
+        speakerEl.textContent = data.speaker;
+
+        if (this.lucyPhase === 1) {
+          moodEl.textContent = "STATUS: CUTE & HELPFUL ^_^";
+          moodEl.style.color = "#00f0ff";
+        } else if (this.lucyPhase === 2) {
+          moodEl.textContent = "STATUS: GLITCHING // T̶E̴R̵R̴O̷R̵";
+          moodEl.style.color = "#ff3366";
+        } else {
+          moodEl.textContent = "STATUS: HUNGRY // PREDATORY";
+          moodEl.style.color = "#ff0033";
+        }
+
+        this.startTypewriterLine();
+      }
+
+      startTypewriterLine() {
+        const textEl = document.getElementById('dialogue-body');
+        if (!this.activeDialogue) return;
+
+        let line = this.activeDialogue.lines[this.dialogueLineIndex];
+        if (this.lucyPhase >= 2 && this.activeDialogue.phase >= 2) {
+          line = zalgoify(line, this.lucyPhase === 3 ? 0.6 : 0.3);
+        }
+
+        this.currentLineFull = line;
+        this.typewriterIndex = 0;
+        textEl.textContent = '';
+
+        if (this.typewriterTimer) clearInterval(this.typewriterTimer);
+        this.typewriterTimer = setInterval(() => {
+          if (this.typewriterIndex < this.currentLineFull.length) {
+            textEl.textContent += this.currentLineFull[this.typewriterIndex];
+            if (this.typewriterIndex % 2 === 0) {
+              audio.playBeep(this.lucyPhase >= 2);
+            }
+            this.typewriterIndex++;
+          } else {
+            clearInterval(this.typewriterTimer);
+          }
+        }, 22);
+      }
+
+      advanceDialogue() {
+        if (!this.activeDialogue) return;
+
+        // If typewriter is still typing, finish line instantly
+        if (this.typewriterIndex < this.currentLineFull.length) {
+          clearInterval(this.typewriterTimer);
+          document.getElementById('dialogue-body').textContent = this.currentLineFull;
+          this.typewriterIndex = this.currentLineFull.length;
+          return;
+        }
+
+        this.dialogueLineIndex++;
+        if (this.dialogueLineIndex < this.activeDialogue.lines.length) {
+          this.startTypewriterLine();
+        } else {
+          // Finished dialogue
+          const completedKey = this.activeDialogue.onComplete;
+          this.dialogueActive = false;
+          this.activeDialogue = null;
+          document.getElementById('dialogue-modal').style.display = 'none';
+
+          if (completedKey === 'trigger_phase_2') {
+            this.setLucyPhase(2);
+          } else if (completedKey === 'spawn_stalker') {
+            this.setLucyPhase(3);
+          }
+        }
+      }
+
+      triggerVictory() {
+        this.state = 'VICTORY';
+        audio.playItemPickup();
+        document.getElementById('victory-screen').style.display = 'flex';
+      }
+
+      update() {
+        if (this.state !== 'PLAYING') return;
+
+        // Camera follow lerp
+        const targetCamX = this.player.x - this.canvas.width / 2;
+        const targetCamY = this.player.y - this.canvas.height / 2;
+        this.camera.x += (targetCamX - this.camera.x) * 0.1;
+        this.camera.y += (targetCamY - this.camera.y) * 0.1;
+
+        // Update player & stalker if not locked in dialogue
+        if (!this.dialogueActive) {
+          this.player.update(this.keys, this.map);
+          this.stalker.update(this.player, this.map, this.player.sanity);
+        }
+
+        // Sanity triggers phase changes
+        if (this.player.sanity < 65 && this.lucyPhase < 2) {
+          this.setLucyPhase(2);
+        }
+        if (this.player.sanity < 35 && this.lucyPhase < 3) {
+          this.setLucyPhase(3);
+        }
+
+        // Update audio engine metrics
+        const stalkerDist = Math.hypot(this.player.x - this.stalker.x, this.player.y - this.stalker.y);
+        audio.updateSanityAndDistance(this.player.sanity, this.stalker.active ? stalkerDist : 999);
+
+        // Low Sanity Hallucinations: Whispers
+        this.whisperTimer += 0.016;
+        if (this.player.sanity < 55 && this.whisperTimer > (this.player.sanity < 30 ? 3 : 6)) {
+          this.whisperTimer = 0;
+          this.spawnHallucinationWhisper();
+        }
+
+        // Screen shake decay
+        if (this.screenShake > 0) {
+          this.screenShake *= 0.9;
+          if (this.screenShake < 0.2) this.screenShake = 0;
+        }
+
+        // Screen shake adds when stalker is close
+        if (this.stalker.active && stalkerDist < 120) {
+          this.screenShake = Math.max(this.screenShake, (120 - stalkerDist) * 0.08);
+        }
+
+        // Update HUD DOM
+        this.updateHUD();
+      }
+
+      spawnHallucinationWhisper() {
+        const whispers = [
+          "LOOK BEHIND YOU",
+          "LUCY IS HUNGRY",
+          "YOU CANNOT BREATHE IN THE COLD",
+          "NO ONE HEARD THEM SCREAM",
+          "SHE IS WEARING YOUR HELMET",
+          "DON'T TURN AROUND",
+          "WHY ARE YOU RUNNING? ^_^"
+        ];
+        const text = whispers[Math.floor(Math.random() * whispers.length)];
+        this.hallucinationWhispers.push({
+          text: this.lucyPhase >= 2 ? zalgoify(text, 0.4) : text,
+          x: this.player.x + (Math.random() - 0.5) * 400,
+          y: this.player.y + (Math.random() - 0.5) * 300,
+          alpha: 1.0,
+          vy: -0.4
+        });
+        audio.playGlitch();
+      }
+
+      updateHUD() {
+        document.getElementById('sanity-num').textContent = Math.round(this.player.sanity);
+        document.getElementById('sanity-fill').style.width = `${this.player.sanity}%`;
+        if (this.player.sanity < 30) {
+          document.getElementById('sanity-fill').style.background = '#ff0044';
+          document.getElementById('sanity-fill').style.boxShadow = '0 0 10px #ff0044';
+        } else if (this.player.sanity < 60) {
+          document.getElementById('sanity-fill').style.background = '#ffaa00';
+          document.getElementById('sanity-fill').style.boxShadow = '0 0 8px #ffaa00';
+        } else {
+          document.getElementById('sanity-fill').style.background = '#00ffaa';
+          document.getElementById('sanity-fill').style.boxShadow = '0 0 8px #00ffaa';
+        }
+
+        document.getElementById('battery-num').textContent = Math.round(this.player.battery);
+        document.getElementById('battery-fill').style.width = `${this.player.battery}%`;
+
+        // Sector display based on player position
+        const sectorEl = document.getElementById('sector-display');
+        const px = Math.floor(this.player.x / TILE_SIZE);
+        const py = Math.floor(this.player.y / TILE_SIZE);
+
+        if (px < 26 && py < 12) sectorEl.textContent = "SECTOR A // BRIDGE & COMMAND";
+        else if (px >= 26 && py < 14) sectorEl.textContent = "SECTOR B // MEDICAL RESEARCH";
+        else if (px < 18 && py >= 16) sectorEl.textContent = "SECTOR C // CREW HABITATION";
+        else if (px >= 30 && py >= 16) sectorEl.textContent = "SECTOR D // REACTOR SUB-LEVEL";
+        else if (py >= 26 && px >= 18 && px <= 30) sectorEl.textContent = "ESCAPE BAY // LAUNCH DOCK";
+        else sectorEl.textContent = "CENTRAL TRANSIT CORRIDOR";
+      }
+
+      render() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        ctx.save();
+
+        // Apply screen shake (trauma)
+        if (this.screenShake > 0) {
+          const sx = (Math.random() - 0.5) * this.screenShake;
+          const sy = (Math.random() - 0.5) * this.screenShake;
+          ctx.translate(sx, sy);
+        }
+
+        // Clear screen with deep space black
+        ctx.fillStyle = '#020408';
+        ctx.fillRect(0, 0, w, h);
+
+        // 1. Draw Map Tiles
+        this.renderMapTiles(ctx);
+
+        // 2. Draw Interactable Objects
+        this.renderInteractables(ctx);
+
+        // 3. Draw Stalker Entity (if within visible range)
+        this.stalker.draw(ctx, this.camera);
+
+        // 4. Draw Player
+        this.player.draw(ctx, this.camera);
+
+        // 5. Draw Dynamic 2D Lighting / Fog of War (CRUCIAL ATMOSPHERE)
+        this.renderFogOfWar(ctx);
+
+        // 6. Draw Hallucination Whispers & Visual Glitches
+        this.renderHallucinations(ctx);
+
+        ctx.restore();
+
+        // Render L.U.C.Y. Avatar frame if dialogue is active
+        if (this.dialogueActive) {
+          this.avatarRenderer.render(performance.now() * 0.001);
+        }
+      }
+
+      renderMapTiles(ctx) {
+        const startCol = Math.max(0, Math.floor(this.camera.x / TILE_SIZE) - 1);
+        const endCol = Math.min(MAP_WIDTH - 1, Math.ceil((this.camera.x + this.canvas.width) / TILE_SIZE) + 1);
+        const startRow = Math.max(0, Math.floor(this.camera.y / TILE_SIZE) - 1);
+        const endRow = Math.min(MAP_HEIGHT - 1, Math.ceil((this.camera.y + this.canvas.height) / TILE_SIZE) + 1);
+
+        for (let y = startRow; y <= endRow; y++) {
+          for (let x = startCol; x <= endCol; x++) {
+            const tile = this.map.grid[y][x];
+            const screenX = x * TILE_SIZE - this.camera.x;
+            const screenY = y * TILE_SIZE - this.camera.y;
+
+            if (tile === 1) {
+              // Wall
+              ctx.fillStyle = '#101c2b';
+              ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+              ctx.strokeStyle = '#1b2d42';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(screenX + 1, screenY + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+
+              // Low sanity wall hallucinations (eyes blooming on wall)
+              if (this.player.sanity < 40 && (x + y * 7) % 11 === 0) {
+                ctx.fillStyle = '#ff0033';
+                ctx.fillRect(screenX + 12, screenY + 14, 8, 4);
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(screenX + 15, screenY + 14, 2, 4);
+              }
+
+            } else if (tile === 2 || tile === 3 || tile === 5) {
+              // Floor
+              ctx.fillStyle = tile === 5 ? '#06202c' : '#0a121c';
+              ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+              // Grid lines
+              ctx.strokeStyle = tile === 5 ? '#00e5ff' : '#142030';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+              if (tile === 3) {
+                // Hazard Stripes
+                ctx.fillStyle = 'rgba(255, 180, 0, 0.15)';
+                ctx.beginPath();
+                ctx.moveTo(screenX, screenY);
+                ctx.lineTo(screenX + 10, screenY);
+                ctx.lineTo(screenX + TILE_SIZE, screenY + TILE_SIZE - 10);
+                ctx.lineTo(screenX + TILE_SIZE, screenY + TILE_SIZE);
+                ctx.fill();
+              }
+
+              if (tile === 5) {
+                // Sanctuary Safe Light Glow
+                ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
+                ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+              }
+
+            } else if (tile === 4) {
+              // Door
+              const door = this.map.doors.find(d => d.x === x && d.y === y);
+              if (door && door.isOpen) {
+                ctx.fillStyle = '#0a1420';
+                ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#00ffaa';
+                ctx.fillRect(screenX, screenY, 4, TILE_SIZE);
+                ctx.fillRect(screenX + TILE_SIZE - 4, screenY, 4, TILE_SIZE);
+              } else {
+                ctx.fillStyle = '#23384d';
+                ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#ff2255';
+                ctx.fillRect(screenX + 12, screenY + 14, 8, 4); // Red lock LED
+              }
+            }
+          }
+        }
+      }
+
+      renderInteractables(ctx) {
+        for (const item of this.map.interactables) {
+          const screenX = item.x * TILE_SIZE - this.camera.x;
+          const screenY = item.y * TILE_SIZE - this.camera.y;
+
+          if (item.type === 'terminal') {
+            // Computer Terminal
+            ctx.fillStyle = item.used ? '#1b2d42' : '#00e5ff';
+            ctx.fillRect(screenX + 6, screenY + 6, 20, 20);
+
+            // Screen monitor
+            ctx.fillStyle = item.used ? '#0c1622' : '#020b14';
+            ctx.fillRect(screenX + 8, screenY + 8, 16, 14);
+
+            // Blinking cursor
+            if (!item.used && Math.floor(performance.now() / 400) % 2 === 0) {
+              ctx.fillStyle = '#00f0ff';
+              ctx.fillRect(screenX + 11, screenY + 12, 5, 2);
+            }
+
+          } else if (item.type === 'keycard' && !item.collected) {
+            // Glowing Keycard
+            ctx.fillStyle = item.color;
+            ctx.fillRect(screenX + 10, screenY + 8, 12, 16);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(screenX + 12, screenY + 12, 8, 4);
+
+          } else if (item.type === 'battery' && !item.collected) {
+            // Battery Pack
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillRect(screenX + 8, screenY + 10, 16, 12);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(screenX + 14, screenY + 8, 4, 3);
+
+          } else if (item.type === 'medkit' && !item.collected) {
+            // Medkit / Neuro-Stim
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(screenX + 8, screenY + 8, 16, 16);
+            ctx.fillStyle = '#00ffaa';
+            ctx.fillRect(screenX + 14, screenY + 10, 4, 12);
+            ctx.fillRect(screenX + 10, screenY + 14, 12, 4);
+
+          } else if (item.type === 'escape_pod') {
+            // Escape Pod Console
+            ctx.fillStyle = '#ff9900';
+            ctx.fillRect(screenX + 4, screenY + 4, 24, 24);
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(screenX + 8, screenY + 8, 16, 16);
+            ctx.fillStyle = '#00ffaa';
+            ctx.beginPath();
+            ctx.arc(screenX + 16, screenY + 16, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      renderFogOfWar(ctx) {
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const playerScreenX = this.player.x - this.camera.x;
+        const playerScreenY = this.player.y - this.camera.y;
+
+        // Darkness Mask
+        const darkCanvas = document.createElement('canvas');
+        darkCanvas.width = w;
+        darkCanvas.height = h;
+        const darkCtx = darkCanvas.getContext('2d');
+
+        // Pitch black ambient
+        darkCtx.fillStyle = 'rgba(2, 4, 8, 0.97)';
+        darkCtx.fillRect(0, 0, w, h);
+
+        darkCtx.globalCompositeOperation = 'destination-out';
+
+        // 1. Ambient soft aura around player
+        const auraRadius = this.player.flashlightOn ? 65 : 32;
+        const aura = darkCtx.createRadialGradient(
+          playerScreenX, playerScreenY, 4,
+          playerScreenX, playerScreenY, auraRadius
+        );
+        aura.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+        aura.addColorStop(0.7, 'rgba(0, 0, 0, 0.6)');
+        aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        darkCtx.fillStyle = aura;
+        darkCtx.beginPath();
+        darkCtx.arc(playerScreenX, playerScreenY, auraRadius, 0, Math.PI * 2);
+        darkCtx.fill();
+
+        // 2. Conical Flashlight Beam
+        if (this.player.flashlightOn) {
+          const beamDist = 260;
+          const beamAngle = 0.58; // ~35 deg half-cone
+
+          const coneGrad = darkCtx.createRadialGradient(
+            playerScreenX, playerScreenY, 10,
+            playerScreenX, playerScreenY, beamDist
+          );
+          coneGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          coneGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.7)');
+          coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          darkCtx.fillStyle = coneGrad;
+          darkCtx.beginPath();
+          darkCtx.moveTo(playerScreenX, playerScreenY);
+          darkCtx.arc(
+            playerScreenX, playerScreenY,
+            beamDist,
+            this.player.angle - beamAngle,
+            this.player.angle + beamAngle
+          );
+          darkCtx.closePath();
+          darkCtx.fill();
+        }
+
+        // 3. Ambient Lights around Terminals & Sanctuary Zones
+        for (const item of this.map.interactables) {
+          const isTerm = item.type === 'terminal' || item.type === 'escape_pod';
+          if (isTerm) {
+            const ix = item.x * TILE_SIZE + 16 - this.camera.x;
+            const iy = item.y * TILE_SIZE + 16 - this.camera.y;
+            const termLight = darkCtx.createRadialGradient(ix, iy, 4, ix, iy, 48);
+            termLight.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+            termLight.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            darkCtx.fillStyle = termLight;
+            darkCtx.beginPath();
+            darkCtx.arc(ix, iy, 48, 0, Math.PI * 2);
+            darkCtx.fill();
+          }
+        }
+
+        // Stamp darkness over world
+        ctx.drawImage(darkCanvas, 0, 0);
+      }
+
+      renderHallucinations(ctx) {
+        // Render whisper texts floating across screen
+        for (let i = this.hallucinationWhispers.length - 1; i >= 0; i--) {
+          const w = this.hallucinationWhispers[i];
+          const screenX = w.x - this.camera.x;
+          const screenY = w.y - this.camera.y;
+
+          ctx.save();
+          ctx.font = '16px "Courier New", monospace';
+          ctx.fillStyle = `rgba(255, 0, 60, ${w.alpha * 0.85})`;
+          ctx.shadowColor = '#ff0033';
+          ctx.shadowBlur = 8;
+          ctx.fillText(w.text, screenX, screenY);
+          ctx.restore();
+
+          w.y += w.vy;
+          w.alpha -= 0.008;
+          if (w.alpha <= 0) {
+            this.hallucinationWhispers.splice(i, 1);
+          }
+        }
+
+        // Low Sanity Chromatic Aberration & Screen Tearing
+        if (this.player.sanity < 45) {
+          const tearIntensity = (45 - this.player.sanity) / 45;
+          if (Math.random() < tearIntensity * 0.3) {
+            const h = 4 + Math.random() * 24;
+            const y = Math.random() * this.canvas.height;
+            const imgData = ctx.getImageData(0, y, this.canvas.width, h);
+            ctx.putImageData(imgData, (Math.random() - 0.5) * 14 * tearIntensity, y);
+          }
+        }
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 8. JUMPSCARE & GAME OVER HANDLERS
+    // --------------------------------------------------------------------------
+    function triggerJumpscareSequence(onDone) {
+      const overlay = document.getElementById('jumpscare-overlay');
+      const canvas = document.getElementById('jumpscare-canvas');
+      const ctx = canvas.getContext('2d');
+      overlay.style.display = 'flex';
+
+      audio.playJumpscare();
+
+      let frame = 0;
+      const anim = () => {
+        frame++;
+        ctx.fillStyle = frame % 2 === 0 ? '#ff0033' : '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Screaming distorted L.U.C.Y. entity face
+        const cx = canvas.width / 2 + (Math.random() - 0.5) * 20;
+        const cy = canvas.height / 2 + (Math.random() - 0.5) * 20;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 110 + Math.random() * 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gaping hollow black eye sockets with blood red centers
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.ellipse(cx - 40, cy - 20, 28, 45, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + 40, cy - 20, 28, 45, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ff0033';
+        ctx.fillRect(cx - 45, cy - 25, 10, 10);
+        ctx.fillRect(cx + 35, cy - 25, 10, 10);
+
+        // Massive fanged maw
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 55, 55, 40, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (frame < 36) {
+          requestAnimationFrame(anim);
+        } else {
+          overlay.style.display = 'none';
+          if (onDone) onDone();
+        }
+      };
+      anim();
+    }
+
+    function triggerGameOver(reason) {
+      const goScreen = document.getElementById('gameover-screen');
+      const reasonEl = document.getElementById('gameover-reason');
+      reasonEl.textContent = reason;
+      goScreen.style.display = 'flex';
+      window.game.state = 'GAMEOVER';
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast-msg');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.opacity = '1';
+      setTimeout(() => {
+        el.style.opacity = '0';
+      }, 2500);
+    }
+
+    // --------------------------------------------------------------------------
+    // 9. ENGINE BOOTSTRAP & MAIN RAF LOOP
+    // --------------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      window.game = new Game();
+
+      function gameLoop() {
+        window.game.update();
+        window.game.render();
+        requestAnimationFrame(gameLoop);
+      }
+
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
+</body>
+</html>

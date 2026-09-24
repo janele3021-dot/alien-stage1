@@ -1,0 +1,6 @@
+{
+  "name": "Aethelgard: Protocol L.U.C.Y.",
+  "description": "A 2D cosmic psychological horror game set aboard an abandoned orbital station. Guided by an AI companion named L.U.C.Y., survive descending sanity, manage flashlight power, and avoid the stalker.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
